@@ -4,26 +4,52 @@ import argparse
 import imutils
 import cv2
 import csv
+import imghdr
+import os.path
+from os.path import join
+from glob import glob
 
-NUM_COLS = 24
-NUM_ROWS = 16
+def check_is_image(fname):
+    return os.path.isfile(fname) and imghdr.what(fname)!=None
 
 def get_file_list():
 # construct the argument parser and parse the arguments
+    global NUM_COLS
+    global NUM_ROWS
+    global kernel_file
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--image", required = False, help = "Path to the image", default = None)
     ap.add_argument("-d", "--dir", required = False, help = "Path to the dir of images", default = None)
+    ap.add_argument("-t", "--template", required = False, help = "Path to the example cropped plate image you want to use.", default = "./data/kernel.PNG")
+    ap.add_argument("-s", "--size", required = False, help = "Size of your plate", default = "384")
     args = vars(ap.parse_args())
+    if int(args["size"]) == 384:
+        NUM_COLS = 24
+        NUM_ROWS = 16
+    else:
+        print args["size"]
+        raise Exception("Unsupported size specified")
+
+    kernel_file = str(args['template'])
+    if check_is_image(kernel_file)==False:
+        raise Exception("Template file "+str(kernel_file)+" not valid image file.")
+
     if args["dir"] != None:
-        pass
-        #files = glob.glob(args["dir"+'/*.{jpg,png,PNG,jpeg}')
+        files = []
+        for ext in ('*.gif', '*.png', '*.jpg', '*.PNG', '*.JPG'):
+            files.extend(glob(join(args["dir"], ext)))
     else:
         files = [args["image"]]
+    for file in files:
+        if check_is_image(file)==False:
+            raise Exception("File " +str(file)+" not a valide image file.")
+    print "Going to process:"
     print files
     return files
 
 def kernel_crop(image):
-    kernel = cv2.imread("./kernel.PNG", cv2.IMREAD_GRAYSCALE)
+    kernel = cv2.imread(kernel_file, cv2.IMREAD_GRAYSCALE)
+    show(kernel)
     filtered = cv2.matchTemplate(image=image,templ=kernel,method=cv2.TM_CCORR_NORMED)
     minV, maxV, minLoc, maxLoc = cv2.minMaxLoc(filtered)
     cv2.rectangle(img=image,pt1=(maxLoc[0],maxLoc[1]),pt2=(maxLoc[0]+kernel.shape[1],maxLoc[1]+kernel.shape[0]), color=(255,-1,-1))
@@ -137,7 +163,7 @@ def get_colony_size(image):
     return colony_size, rowpic
 
 def save_to_file(size, filename):
-    with open("output.csv", "wb") as f:
+    with open(filename, "wb") as f:
         writer = csv.writer(f)
         writer.writerow(['row', 'column', 'size'])
         for y in xrange(NUM_ROWS):
@@ -164,13 +190,12 @@ def normalize_edges(sizes):
     return new_sizes
 
 files = get_file_list()
-file = files[0]
-image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-cropped_im = kernel_crop(image.copy())
-sizes, image_w_circles = get_colony_size(cropped_im)
-sizes = normalize_edges(sizes)
-save_to_file(sizes, './output.csv')
-cv2.imwrite('./detected.png',image_w_circles)
-show(image_w_circles)
-print sizes
+for file in files:
+    image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+    cropped_im = kernel_crop(image.copy())
+    sizes, image_w_circles = get_colony_size(cropped_im)
+    sizes = normalize_edges(sizes)
+    save_to_file(sizes, './results_numbers/output_' + os.path.basename(file) + '.csv')
+    cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
+    show(image_w_circles)
 
