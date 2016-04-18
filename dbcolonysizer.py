@@ -12,15 +12,15 @@ from glob import glob
 def check_is_image(fname):
     return os.path.isfile(fname) and imghdr.what(fname)!=None
 
-def get_file_list():
+def get_file_list(image_directory = None, template_image = "./data/kernel.PNG"):
 # construct the argument parser and parse the arguments
     global NUM_COLS
     global NUM_ROWS
     global kernel_file
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--image", required = False, help = "Path to the image", default = None)
-    ap.add_argument("-d", "--dir", required = False, help = "Path to the dir of images", default = None)
-    ap.add_argument("-t", "--template", required = False, help = "Path to the example cropped plate image you want to use.", default = "./data/kernel.PNG")
+    ap.add_argument("-d", "--dir", required = False, help = "Path to the dir of images", default = image_directory)
+    ap.add_argument("-t", "--template", required = False, help = "Path to the example cropped plate image you want to use.", default = template_image)
     ap.add_argument("-s", "--size", required = False, help = "Size of your plate", default = "384")
     args = vars(ap.parse_args())
     if int(args["size"]) == 384:
@@ -189,13 +189,17 @@ def normalize_edges(sizes):
                 new_sizes[x,y] = sizes[x,y]
     return new_sizes
 
-files = get_file_list()
-for file in files:
-    image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-    cropped_im = kernel_crop(image.copy())
-    sizes, image_w_circles = get_colony_size(cropped_im)
-    sizes = normalize_edges(sizes)
-    save_to_file(sizes, './results_numbers/output_' + os.path.basename(file) + '.csv')
-    cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
-    show(image_w_circles)
+def process_files(files):
+    for file in files:
+        image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+        cropped_im = kernel_crop(image.copy())
+        sizes, image_w_circles = get_colony_size(cropped_im)
+        sizes = normalize_edges(sizes)
+        save_to_file(sizes, './results_numbers/output_' + os.path.basename(file) + '.csv')
+        cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
+        show(image_w_circles)
+
+if __name__ == "__main__":
+    files = get_file_list(image_directory = None, template_image = "./data/kernel.PNG")
+    process_files(files)
 
