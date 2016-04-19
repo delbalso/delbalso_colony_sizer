@@ -5,6 +5,7 @@ import imutils
 import cv2
 import csv
 import imghdr
+import pandas as pd
 import os.path
 from os.path import join
 from glob import glob
@@ -190,14 +191,32 @@ def normalize_edges(sizes):
     return new_sizes
 
 def process_files(files):
+    i = 0
+    formatted_sizes_defined = False
     for file in files:
         image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
         cropped_im = kernel_crop(image.copy())
-        sizes, image_w_circles = get_colony_size(cropped_im)
-        sizes = normalize_edges(sizes)
-        save_to_file(sizes, './results_numbers/output_' + os.path.basename(file) + '.csv')
+        colony_sizes, image_w_circles = get_colony_size(cropped_im)
+        colony_sizes = normalize_edges(colony_sizes)
+#define Pandas column/index
+        columns = pd.MultiIndex.from_tuples([(os.path.basename(file), column_num) for column_num in xrange(NUM_ROWS)], names=["File", 'Column'])
+        index = [row_num for row_num in xrange(NUM_COLS)]
+        if formatted_sizes_defined==False:
+            colony_sizes_df = pd.DataFrame(data=colony_sizes,index=index,columns=columns)
+            colony_sizes_df.index.name = "row"
+            print colony_sizes_df
+            formatted_sizes  = colony_sizes_df.stack()
+            formatted_sizes_defined = True
+        else:
+            new_column = pd.DataFrame(data=colony_sizes,index=index,columns=columns)
+            new_column.index.name = "row"
+            new_column_stacked = new_column.stack()
+            print new_column_stacked
+            formatted_sizes=formatted_sizes.join(new_column_stacked)
+            print formatted_sizes
         cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
         show(image_w_circles)
+    formatted_sizes.to_csv(path_or_buf='./results_numbers/results.csv')
 
 if __name__ == "__main__":
     files = get_file_list(image_directory = None, template_image = "./data/kernel.PNG")
