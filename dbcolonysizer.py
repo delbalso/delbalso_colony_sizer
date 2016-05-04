@@ -204,14 +204,12 @@ def process_files(files):
         if formatted_sizes_defined==False:
             colony_sizes_df = pd.DataFrame(data=colony_sizes,index=index,columns=columns)
             colony_sizes_df.index.name = "row"
-            print colony_sizes_df
             formatted_sizes  = colony_sizes_df.stack()
             formatted_sizes_defined = True
         else:
             new_column = pd.DataFrame(data=colony_sizes,index=index,columns=columns)
             new_column.index.name = "row"
             new_column_stacked = new_column.stack()
-            print new_column_stacked
             formatted_sizes=formatted_sizes.join(new_column_stacked)
             print formatted_sizes
         cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
