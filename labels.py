@@ -9,13 +9,15 @@ import imghdr
 from glob import glob
 import dbcolonysizer
 
-
-replicate_order = {0:[0, 1,2,3], 1:[1,0,3,2], 2:[2,3,0,1],3:[3,2,1,0]} # which position each plate corresponds to on the master plate
+NUM_COLS = 24
+NUM_ROWS = 16
+replicate_order = {'replicate1':[0, 1,2,3], 'replicate2':[1,0,3,2], 'replicate3':[2,3,0,1],'replicate4':[3,2,1,0]} # which position each plate corresponds to on the master plate
 def process_experiments(path):
     pinnings = {}
     replicates = {}
     experiments = {}
     days = {}
+    data_to_process = []
     for root, dirs, files in os.walk(path):
         # keep only images
         files = [file for file in files if imghdr.what(os.path.join(root,file))!=None]
@@ -29,34 +31,62 @@ def process_experiments(path):
         replicates[replicate]=1
         experiments[experiment]=1
         for day in files:
+            filepath = os.path.join(root,day)
             days[day] = 1
+            data_to_process.append((filepath, experiment, replicate, pinning, day))
         #print "Experiment: "+str(experiment)+". Replicate: "+str(replicate)+". Pinning: "+str(pinning)+". Days: "+str(files)
 
     print "Experiments: " + str(experiments.keys())
     print "Replicates: " + str(replicates.keys())
     print "Pinnings: " + str(pinnings.keys())
     print "Days: " + str(days.keys())
-    iterables = [experiments.keys(), replicates.keys(), pinnings.keys(), [os.path.splitext(day)[0] for day in days.keys()]]
-    index = pd.MultiIndex.from_product(iterables, names=['Experiments', 'Replicates', 'Pinnings', 'Days'])
-    a = pd.DataFrame(columns = index)
-    print a
+    print "Data to process: " + str(data_to_process)
+    c_iterables = [experiments.keys(), replicates.keys(), pinnings.keys(), [os.path.splitext(day)[0] for day in days.keys()]]
+    c_index = pd.MultiIndex.from_product(c_iterables, names=['Experiments', 'Replicates', 'Pinnings', 'Days'])
+    # get a list of all genes in all experiments
+    gene_list = {} # key is replicate, values are dataframes of row/col & genes
+    gene_dict = {} # keys are genes. used for deduping
+    for replicate in replicates:
+        gene_list[replicate] = replicate_to_gene_list(replicate)
+        for gene in gene_list[replicate]['SGD']:
+            gene_dict[gene] = 1
+    genes = gene_dict.keys()
+
+    a = pd.DataFrame(columns = c_index, index = genes)
+
+    master_table_not_defined = True
+    master_table = None
 
     # process files and populate main table
-    for root, dirs, files in os.walk(path):
-        # keep only images
-        files = [file for file in files if imghdr.what(os.path.join(root,file))!=None]
-        if len(files)==0:
-            continue
-        path = root
-        path, pinning = os.path.split(path)
-        path, replicate = os.path.split(path)
-        path, experiment = os.path.split(path)
-    raise
+    for filepath, experiment, replicate, pinning, day in data_to_process:
+
+        day_data = process_day(filepath)
+        day_data.columns = ['single_column']
+        #print day_data
+        day_data = day_data.join(gene_list[replicate])
+        day_data.set_index('ORF', inplace = True)
+
+        # Make new index that has different levels
+        day_index = pd.MultiIndex.from_tuples([(experiment, replicate, pinning, os.path.splitext(day)[0])], names=['Experiments', 'Replicates', 'Pinnings', 'Days'])
+        day_data = day_data['single_column']
+        day_data = pd.DataFrame(day_data.values, columns = day_index, index = day_data.index)
+        print day_data.shape
+        groups = day_data.groupby(level=0) # dedupe repeated indices
+        day_data = groups.last()
+        if master_table_not_defined:
+            master_table = day_data
+            master_table_not_defined = False
+            print master_table.shape
+        else:
+            master_table = master_table.join(day_data,how='outer')
+            print master_table.shape
+    master_table.to_csv('./results_numbers/all_data.csv', sep="\t")
 
 #process a single day's data, this is for a given experiment, replica, and pinning
 def process_day(filename):
-    day_data = dbcolonysizer.process_files(filename)
-    print day_data
+    db = dbcolonysizer.DBColonySizer()
+    db.initialize()
+    day_data = db.process_files(filename)
     return day_data
 
 # Returns a list of positions and genes in that position. The index of this dataframe is the position
@@ -95,12 +125,9 @@ def replicate_to_gene_list(replicate):
     return master_plate
 
 if __name__ == "__main__":
-    dbcolonysizer.initialize()
-    print replicate_to_gene_list(1)
-    raise
+    #print replicate_to_gene_list(1)
     process_experiments('./data/experiments')
     #process_pinning('./data/experiments/experiment1/replicate1/pin1')
     #process_day('./data/experiments/experiment1/replicate1/pin1/day1.JPG')
-    raise
 
 
