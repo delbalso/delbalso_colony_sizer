@@ -13,6 +13,14 @@ from glob import glob
 def check_is_image(fname):
     return os.path.isfile(fname) and imghdr.what(fname)!=None
 
+def initialize (template_image = "./data/kernel.PNG"):
+    global NUM_COLS
+    global NUM_ROWS
+    global kernel_file
+    kernel_file = template_image
+    NUM_COLS = 24
+    NUM_ROWS = 16
+
 def get_file_list(image_directory = None, template_image = "./data/kernel.PNG"):
 # construct the argument parser and parse the arguments
     global NUM_COLS
@@ -48,9 +56,10 @@ def get_file_list(image_directory = None, template_image = "./data/kernel.PNG"):
     print files
     return files
 
+# crop an image to roughly the shape of the kernel
 def kernel_crop(image):
     kernel = cv2.imread(kernel_file, cv2.IMREAD_GRAYSCALE)
-    show(kernel)
+    #show(kernel)
     filtered = cv2.matchTemplate(image=image,templ=kernel,method=cv2.TM_CCORR_NORMED)
     minV, maxV, minLoc, maxLoc = cv2.minMaxLoc(filtered)
     cv2.rectangle(img=image,pt1=(maxLoc[0],maxLoc[1]),pt2=(maxLoc[0]+kernel.shape[1],maxLoc[1]+kernel.shape[0]), color=(255,-1,-1))
@@ -193,13 +202,16 @@ def normalize_edges(sizes):
 def process_files(files):
     i = 0
     formatted_sizes_defined = False
+    if not isinstance(files, list):
+        files = [files]
     for file in files:
+        print "file = " + str(file)
         image  = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
         cropped_im = kernel_crop(image.copy())
         colony_sizes, image_w_circles = get_colony_size(cropped_im)
         colony_sizes = normalize_edges(colony_sizes)
 #define Pandas column/index
-        columns = pd.MultiIndex.from_tuples([(os.path.basename(file), column_num) for column_num in xrange(NUM_ROWS)], names=["File", 'Column'])
+        columns = pd.MultiIndex.from_tuples([(os.path.splitext(os.path.basename(file))[0], column_num) for column_num in xrange(NUM_ROWS)], names=["File", 'Column'])
         index = [row_num for row_num in xrange(NUM_COLS)]
         if formatted_sizes_defined==False:
             colony_sizes_df = pd.DataFrame(data=colony_sizes,index=index,columns=columns)
@@ -215,6 +227,7 @@ def process_files(files):
         cv2.imwrite('./results_images/output_' + os.path.basename(file) +'.png',image_w_circles)
         show(image_w_circles)
     formatted_sizes.to_csv(path_or_buf='./results_numbers/results.csv')
+    return formatted_sizes
 
 if __name__ == "__main__":
     files = get_file_list(image_directory = None, template_image = "./data/kernel.PNG")
