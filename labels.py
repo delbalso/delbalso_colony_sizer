@@ -88,7 +88,6 @@ def process_batch(path):
 
         day_data = process_day(filepath)
         day_data.columns = ['single_column']
-        # print day_data
         day_data = day_data.join(gene_list[replicate])
         day_data.set_index('ORF', inplace=True)
 
@@ -102,16 +101,15 @@ def process_batch(path):
             day_data.values,
             columns=day_index,
             index=day_data.index)
-        print day_data.shape
         groups = day_data.groupby(level=0)  # dedupe repeated indices
         day_data = groups.last()
         if master_table_not_defined:
             master_table = day_data
             master_table_not_defined = False
-            print master_table.shape
         else:
             master_table = master_table.join(day_data, how='outer')
-            print master_table.shape
+        print master_table.shape
+    print master_table
     master_table.to_csv(RESULTS_FOLDER + 'all_data.csv', sep="\t")
 
 # process a single day's data, this is for a given experiment, replica,
@@ -119,8 +117,7 @@ def process_batch(path):
 
 
 def process_day(filename):
-    db = dbcolonysizer.DBColonySizer()
-    db.initialize()
+    db = dbcolonysizer.DBColonySizer(show_images=None)
     day_data = db.process_files(filename)
     return day_data
 
