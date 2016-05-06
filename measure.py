@@ -11,10 +11,10 @@ from os.path import join
 from glob import glob
 
 
-""" PlateMeasurer performs measurements on images of plates."""
+""" ColonyMeasurer performs measurements on images of plates."""
 
 
-class DBColonySizer(object):
+class ColonyMeasurer(object):
 
     def __init__(self, template_image="./example_data/kernel.PNG",
                  show_images=None):
@@ -102,7 +102,7 @@ class DBColonySizer(object):
                     new_sizes[x, y] = sizes[x, y]
         return new_sizes
 
-    def process_files(self, files):
+    def measure_colonies(self, files):
         index = pd.MultiIndex.from_product(
             [range(self.NUM_ROWS), range(self.NUM_COLS)], names=["Row", "Column"])
         colonies_sizes = pd.DataFrame(index=index)
@@ -220,10 +220,10 @@ def get_sub_image(x, y, image, x_size, y_size):
 def check_is_image(fname):
     return os.path.isfile(fname) and imghdr.what(fname) != None
 if __name__ == "__main__":
-    db = DBColonySizer()
+    db = ColonyMeasurer()
     file_list = []
     for root, dirs, files in os.walk('/Users/delbalso/Downloads/Gmail'):
         print files
         file_list = [os.path.join(root, file) for file in files]
     print file_list
-    db.process_files(file_list)
+    db.measure_colonies(file_list)

@@ -7,7 +7,7 @@ from xlsxwriter.utility import xl_rowcol_to_cell, xl_cell_to_rowcol
 from os.path import join
 import imghdr
 from glob import glob
-import dbcolonysizer
+import measure
 RESULTS_FOLDER = './results_numbers/'
 NUM_COLS = 24
 NUM_ROWS = 16
@@ -83,7 +83,7 @@ def process_batch(path):
     master_table_not_defined = True
     master_table = None
 
-    # process files and populate main table
+    # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
 
         day_data = process_day(filepath)
@@ -117,8 +117,8 @@ def process_batch(path):
 
 
 def process_day(filename):
-    db = dbcolonysizer.DBColonySizer(show_images=None)
-    day_data = db.process_files(filename)
+    db = measure.ColonyMeasurer(show_images=None)
+    day_data = db.measure_colonies(filename)
     return day_data
 
 # get_gene_list returns a list of positions and genes in that position. The index of
