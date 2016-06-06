@@ -12,10 +12,10 @@ RESULTS_FOLDER = './results_numbers/'
 NUM_COLS = 24
 NUM_ROWS = 16
 replicate_order = {
-    'replicate1': [
-        0, 1, 2, 3], 'replicate2': [
-            1, 0, 3, 2], 'replicate3': [
-                2, 3, 0, 1], 'replicate4': [
+    'A': [
+        0, 1, 2, 3], 'B': [
+            1, 0, 3, 2], 'C': [
+                2, 3, 0, 1], 'D': [
                     3, 2, 1, 0]}  # which position each plate corresponds to on the master plate
 
 """ Process a batch of experiments where path is a dir of experiment directories conforming to a experiment>treatment>replicate>pinning>day hierarchy where day is the leaf and is an image file."""
@@ -82,14 +82,17 @@ def process_batch(path):
 
     master_table_not_defined = True
     master_table = None
+    total_missing = 0
 
     # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
 
-        day_data = process_day(filepath)
+        day_data, missing_count = process_day(filepath)
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
-        day_data.set_index('ORF', inplace=True)
+        day_data.to_csv("{0}{1}_{2}_{3}_{4}_{5}_original.csv".format(RESULTS_FOLDER,experiment, treatment, replicate, pinning, day), sep="\t")
+        day_data.set_index('SGD', inplace=True)
+        total_missing += missing_count
 
         # Make new index that has different levels
         day_index = pd.MultiIndex.from_tuples(
@@ -103,23 +106,38 @@ def process_batch(path):
             index=day_data.index)
         groups = day_data.groupby(level=0)  # dedupe repeated indices
         day_data = groups.last()
+        day_data.to_csv("{0}{1}_{2}_{3}_{4}_{5}.csv".format(RESULTS_FOLDER,experiment, treatment, replicate, pinning, day), sep="\t")
         if master_table_not_defined:
             master_table = day_data
             master_table_not_defined = False
         else:
             master_table = master_table.join(day_data, how='outer')
         print master_table.shape
-    print master_table
-    master_table.to_csv(RESULTS_FOLDER + 'all_data.csv', sep="\t")
+    #print master_table
+    master_table.to_csv(RESULTS_FOLDER + 'all_data.csv', sep=",")
+    means = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).mean()
+    medians = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).median()
+    #means_normalized = means / means['EXPERIMENT1']
+    #medians_normalized = medians / medians['EXPERIMENT1']
+    print means
+    print medians
+    #print means_normalized
+    #print medians_normalized
+    means.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
+    medians.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
+    #means_normalized.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
+    #medians_normalized.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
+    print "Total number of missing colony measurements is {0}".format(total_missing)
 
 # process a single day's data, this is for a given experiment, replica,
 # and pinning
 
 
 def process_day(filename):
-    db = measure.ColonyMeasurer(show_images=None)
-    day_data = db.measure_colonies(filename)
-    return day_data
+    db = measure.ColonyMeasurer(show_images=None)#'missing')
+    print "Processing: {0}".format(filename)
+    day_data, missing_count = db.measure_colonies(filename)
+    return day_data, missing_count
 
 # get_gene_list returns a list of positions and genes in that position. The index of
 # this dataframe is the position
@@ -188,4 +206,4 @@ def get_gene_list(replicate):
     return master_plate
 
 if __name__ == "__main__":
-    process_batch('./example_data/images/batch1/')
+    process_batch('./example_data/Nere_imagesf/')

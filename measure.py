@@ -16,12 +16,50 @@ from glob import glob
 
 class ColonyMeasurer(object):
 
-    def __init__(self, template_image="./example_data/kernel.PNG",
+    def __init__(self, template_image="./example_data/kernel3.PNG",
                  show_images=None):
         self.kernel_file = template_image
         self.NUM_COLS = 24
         self.NUM_ROWS = 16
         self.SHOW_IMAGES = show_images  # can set to 'all' or 'missing'
+
+    def detectcolonies(self,image):
+        # Setup SimpleBlobDetector parameters.
+        params = cv2.SimpleBlobDetector_Params()
+        params.minDistBetweenBlobs = 30
+# Change thresholds
+        params.minThreshold = 0
+        params.maxThreshold = 100
+# Filter by Area.
+        params.filterByArea = True
+        params.minArea = 55
+        params.maxArea = 1500
+# Filter by Circularity
+        params.filterByCircularity = True
+        params.minCircularity = 0.5
+# Filter by Convexity
+        params.filterByConvexity = True
+        params.minConvexity = 0.07
+# Filter by Inertia
+        params.filterByInertia = True
+        params.minInertiaRatio = 0.0
+        detector = cv2.SimpleBlobDetector_create(params)
+# Detect blobs.
+        keypoints = detector.detect(255 - image)
+        largest = keypoints
+        if len(keypoints) > 1:
+            size = 0
+            for keypoint in keypoints:
+                if keypoint.size > size:
+                    largest = [keypoint]
+                    size = keypoint.size
+
+        if self.SHOW_IMAGES!=None:
+            im_with_keypoints = cv2.drawKeypoints(image, largest, np.array(
+                []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        else:
+            im_with_keypoints = None
+        return largest, im_with_keypoints
 
     """ kernel_crop takes an image, locates the part of the image which is most similar to the kernel, and crops to that part of the image. That main idea is for this to be used to crop to just the plate. """
 
@@ -55,21 +93,23 @@ class ColonyMeasurer(object):
             rowpic = None
             for y in xrange(0, self.NUM_COLS):
                 cell = get_sub_image(x, y, image, self.NUM_ROWS, self.NUM_COLS)
-                points, pic = detectcolonies(cell)
+                points, pic = self.detectcolonies(cell)
                 assert len(points) < 2
                 if len(points) < 1:
                     count_missing_measurements += 1
                     colony_size[x, y] = np.nan
                 else:
                     colony_size[x, y] = points[0].size
-                if rowpic is None:
-                    rowpic = pic
+                if self.SHOW_IMAGES!=None:
+                    if rowpic is None:
+                        rowpic = pic
+                    else:
+                        rowpic = np.hstack((rowpic, pic))
+            if self.SHOW_IMAGES!=None:
+                if colpic is None:
+                    colpic = rowpic
                 else:
-                    rowpic = np.hstack((rowpic, pic))
-            if colpic is None:
-                colpic = rowpic
-            else:
-                colpic = np.vstack((colpic, rowpic))
+                    colpic = np.vstack((colpic, rowpic))
         # print "less than 1 points: " + str(count_missing_measurements)
         return colony_size, colpic, count_missing_measurements
 
@@ -83,26 +123,27 @@ class ColonyMeasurer(object):
 
     """ normalize_edges takes an array of sizes and normalizes the values around the edge of a plate such that the median size of edge colonies is the same as the median size of the colonies in the rest of the plate """
 
-    def normalize_edges(self, sizes):  # TODO: make sure this works when values are missing
+    def normalize_edges(self, sizes):
         outside_vals = list()
         inside_vals = list()
         for y in xrange(self.NUM_COLS):
             for x in xrange(self.NUM_ROWS):
-                if y == 1 or y == self.NUM_COLS - 1 or x == 1 or x == self.NUM_ROWS - 1:
+                if y == 0 or y == self.NUM_COLS - 1 or x == 0 or x == self.NUM_ROWS - 1:
                     outside_vals.append(sizes[x, y])
                 else:
                     inside_vals.append(sizes[x, y])
-        correction = np.median(inside_vals) / np.median(outside_vals)
+        correction = np.nanmedian(inside_vals) / np.nanmedian(outside_vals)
         new_sizes = np.empty_like(sizes)
         for y in xrange(self.NUM_COLS):
             for x in xrange(self.NUM_ROWS):
-                if y == 1 or y == self.NUM_COLS - 1 or x == 1 or x == self.NUM_ROWS - 1:
+                if y == 0 or y == self.NUM_COLS - 1 or x == 0 or x == self.NUM_ROWS - 1:
                     new_sizes[x, y] = sizes[x, y] * correction
                 else:
                     new_sizes[x, y] = sizes[x, y]
         return new_sizes
 
     def measure_colonies(self, files):
+        total_missing = 0
         index = pd.MultiIndex.from_product(
             [range(self.NUM_ROWS), range(self.NUM_COLS)], names=["Row", "Column"])
         colonies_sizes = pd.DataFrame(index=index)
@@ -116,7 +157,7 @@ class ColonyMeasurer(object):
             n_colony_sizes = self.normalize_edges(colony_sizes)
             colonies_sizes[os.path.splitext(os.path.basename(file))[
                 0]] = n_colony_sizes.reshape(-1, 1)
-
+            total_missing += missing_measurements
             if missing_measurements > 0:  # Report when missing measurements
                 print "Missing {0} for file {1}".format(missing_measurements, file)
                 if self.SHOW_IMAGES == 'all' or self.SHOW_IMAGES == 'missing':
@@ -128,8 +169,7 @@ class ColonyMeasurer(object):
                 '.png',
                 image_w_circles)
 
-        colonies_sizes.to_csv(path_or_buf='./results_numbers/results.csv')
-        return colonies_sizes
+        return colonies_sizes, total_missing
 
 
 def show(image):
@@ -174,40 +214,6 @@ def crop_to_kernel():
     pass
 
 
-def detectcolonies(image):
-    # Setup SimpleBlobDetector parameters.
-    params = cv2.SimpleBlobDetector_Params()
-    params.minDistBetweenBlobs = 30
-# Change thresholds
-    params.minThreshold = 0
-    params.maxThreshold = 100
-# Filter by Area.
-    params.filterByArea = True
-    params.minArea = 55
-    params.maxArea = 1500
-# Filter by Circularity
-    params.filterByCircularity = True
-    params.minCircularity = 0.5
-# Filter by Convexity
-    params.filterByConvexity = True
-    params.minConvexity = 0.07
-# Filter by Inertia
-    params.filterByInertia = True
-    params.minInertiaRatio = 0.0
-    detector = cv2.SimpleBlobDetector_create(params)
-# Detect blobs.
-    keypoints = detector.detect(255 - image)
-    largest = keypoints
-    if len(keypoints) > 1:
-        size = 0
-        for keypoint in keypoints:
-            if keypoint.size > size:
-                largest = [keypoint]
-                size = keypoint.size
-
-    im_with_keypoints = cv2.drawKeypoints(image, largest, np.array(
-        []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    return largest, im_with_keypoints
 
 
 def get_sub_image(x, y, image, x_size, y_size):
