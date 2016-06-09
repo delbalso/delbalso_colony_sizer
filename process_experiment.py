@@ -86,8 +86,7 @@ def process_batch(path):
 
     # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
-
-        day_data, missing_count = process_day(filepath)
+        day_data, missing_count = process_day(filepath, filename_to_save = "{0}_{1}_{2}_{3}_{4}".format(experiment, treatment, replicate, pinning, day))
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
         day_data.to_csv("{0}{1}_{2}_{3}_{4}_{5}_original.csv".format(RESULTS_FOLDER,experiment, treatment, replicate, pinning, day), sep="\t")
@@ -108,6 +107,7 @@ def process_batch(path):
         day_data = groups.last()
         day_data.to_csv("{0}{1}_{2}_{3}_{4}_{5}.csv".format(RESULTS_FOLDER,experiment, treatment, replicate, pinning, day), sep="\t")
         if master_table_not_defined:
+
             master_table = day_data
             master_table_not_defined = False
         else:
@@ -116,15 +116,17 @@ def process_batch(path):
     #print master_table
     master_table.to_csv(RESULTS_FOLDER + 'all_data.csv', sep=",")
     means = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).mean()
+    means.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
     medians = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).median()
+    medians.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
+    stddevs = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).std()
+    stddevs.to_csv(RESULTS_FOLDER + 'all_data_stddevs.csv', sep="\t")
     #means_normalized = means / means['EXPERIMENT1']
     #medians_normalized = medians / medians['EXPERIMENT1']
     print means
     print medians
     #print means_normalized
     #print medians_normalized
-    means.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
-    medians.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
     #means_normalized.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
     #medians_normalized.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
     print "Total number of missing colony measurements is {0}".format(total_missing)
@@ -133,10 +135,11 @@ def process_batch(path):
 # and pinning
 
 
-def process_day(filename):
-    db = measure.ColonyMeasurer(show_images=None)#'missing')
+def process_day(filename, filename_to_save = None):
+    db = measure.ColonyMeasurer(show_images=None, save_images='all')
     print "Processing: {0}".format(filename)
-    day_data, missing_count = db.measure_colonies(filename)
+    day_data, missing_count = db.measure_colonies(filename, filename_to_save = filename_to_save )
+
     return day_data, missing_count
 
 # get_gene_list returns a list of positions and genes in that position. The index of
@@ -207,3 +210,5 @@ def get_gene_list(replicate):
 
 if __name__ == "__main__":
     process_batch('./example_data/Nere_imagesf/')
+    #day_data, missing = process_day('./example_data/Nere_imagesf/Set 1/EXPERIMENT6/T3/D/PINNING2/DAY1.JPG', filename_to_save= "w")
+    #print day_data
