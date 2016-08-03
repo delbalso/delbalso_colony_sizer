@@ -121,8 +121,17 @@ def process_batch(path):
     medians.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
     stddevs = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).std()
     stddevs.to_csv(RESULTS_FOLDER + 'all_data_stddevs.csv', sep="\t")
-    #means_normalized = means / means['EXPERIMENT1']
-    #medians_normalized = medians / medians['EXPERIMENT1']
+    master_table_mean_normalized = master_table / master_table.mean()
+    master_table_mean_normalized.to_csv(RESULTS_FOLDER + 'all_data_mean_normalized.csv', sep="\t")
+    master_table_median_normalized = master_table / master_table.median()
+    master_table_median_normalized.to_csv(RESULTS_FOLDER + 'all_data_median_normalized.csv', sep="\t")
+    median_normalized_means = master_table_median_normalized.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).mean()
+    median_normalized_means.to_csv(RESULTS_FOLDER + 'median_normalized_means.csv', sep="\t")
+    median_normalized_medians = master_table.groupby(axis = 1, level = ['Experiments', 'Treatments', 'Pinnings', 'Days']).median()
+    median_normalized_medians.to_csv(RESULTS_FOLDER + 'median_normalized_medians.csv', sep="\t")
+
+    control_normalized_comparisons = median_normalized_means[['EXPERIMENT1','EXPERIMENT5','EXPERIMENT6']] / median_normalized_means['EXPERIMENT1']
+    control_normalized_comparisons.to_csv(RESULTS_FOLDER + 'control_normalized_comparisons.csv', sep="\t")
     print means
     print medians
     #print means_normalized
@@ -136,7 +145,7 @@ def process_batch(path):
 
 
 def process_day(filename, filename_to_save = None):
-    db = measure.ColonyMeasurer(show_images=None, save_images='all')
+    db = measure.ColonyMeasurer(show_images=None, save_images=None)
     print "Processing: {0}".format(filename)
     day_data, missing_count = db.measure_colonies(filename, filename_to_save = filename_to_save )
 
