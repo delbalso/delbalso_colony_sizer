@@ -22,6 +22,10 @@ replicate_order = {
 
 
 def measure_batch(path):
+    # Ensure path exists for plate_measurements
+    MEASUREMENTS_FOLDER = os.path.join(RESULTS_FOLDER,'plate_measurements/')
+    if not os.path.exists(MEASUREMENTS_FOLDER):
+        os.makedirs(MEASUREMENTS_FOLDER)
     pinnings = {}
     replicates = {}
     experiments = {}
@@ -92,15 +96,6 @@ def measure_batch(path):
                 experiment, treatment, replicate, pinning, day))
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
-        day_data.to_csv(
-            "{0}{1}_{2}_{3}_{4}_{5}_original.csv".format(
-                RESULTS_FOLDER,
-                experiment,
-                treatment,
-                replicate,
-                pinning,
-                day),
-            sep="\t")
         day_data.set_index('SGD', inplace=True)
         total_missing += missing_count
 
@@ -127,12 +122,12 @@ def measure_batch(path):
         day_data = groups.last()
         day_data.to_csv(
             "{0}{1}_{2}_{3}_{4}_{5}.csv".format(
-                RESULTS_FOLDER,
+                MEASUREMENTS_FOLDER,
                 experiment,
                 treatment,
                 replicate,
                 pinning,
-                day),
+                os.path.splitext(day)[0]),
             sep="\t")
         if master_table_not_defined:
 
@@ -144,9 +139,18 @@ def measure_batch(path):
     print "Total number of missing colony measurements is {0}".format(total_missing)
     return master_table
 
-def print_data(data):
-    # print master_table
-    data.to_csv(RESULTS_FOLDER + 'all_data.csv', sep=",")
+
+""" basic_stats_over_replicates computes and saves medians and other stats from the data set"""
+
+def basic_stats_over_replicates(data):
+
+    # Ensure path exists for plate_measurements
+    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER,'data_summaries/')
+    if not os.path.exists(SUMMARIES_FOLDER):
+        os.makedirs(SUMMARIES_FOLDER)
+    data.to_csv(SUMMARIES_FOLDER + 'all_data.csv', sep=",")
+
+    # Mean
     means = data.groupby(
         axis=1,
         level=[
@@ -154,7 +158,9 @@ def print_data(data):
             'Treatments',
             'Pinnings',
             'Days']).mean()
-    means.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
+    means.to_csv(SUMMARIES_FOLDER + 'mean_size_over_replicates.csv', sep="\t")
+
+    # Median
     medians = data.groupby(
         axis=1,
         level=[
@@ -162,7 +168,9 @@ def print_data(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    medians.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
+    medians.to_csv(SUMMARIES_FOLDER + 'median_size_over_replicates.csv', sep="\t")
+
+    # Standard Deviations
     stddevs = data.groupby(
         axis=1,
         level=[
@@ -170,57 +178,18 @@ def print_data(data):
             'Treatments',
             'Pinnings',
             'Days']).std()
-    stddevs.to_csv(RESULTS_FOLDER + 'all_data_stddevs.csv', sep="\t")
-    data_mean_normalized = data / data.mean()
-    data_mean_normalized.to_csv(
-        RESULTS_FOLDER +
-        'all_data_mean_normalized.csv',
-        sep="\t")
-    data_median_normalized = data / data.median()
-    data_median_normalized.to_csv(
-        RESULTS_FOLDER +
-        'all_data_median_normalized.csv',
-        sep="\t")
-    median_normalized_means = data_median_normalized.groupby(
-        axis=1,
-        level=[
-            'Experiments',
-            'Treatments',
-            'Pinnings',
-            'Days']).mean()
-    median_normalized_means.to_csv(
-        RESULTS_FOLDER +
-        'median_normalized_means.csv',
-        sep="\t")
-    median_normalized_medians = data.groupby(
-        axis=1,
-        level=[
-            'Experiments',
-            'Treatments',
-            'Pinnings',
-            'Days']).median()
-    median_normalized_medians.to_csv(
-        RESULTS_FOLDER +
-        'median_normalized_medians.csv',
-        sep="\t")
+    stddevs.to_csv(SUMMARIES_FOLDER + 'stddev_size_over_replicates.csv', sep="\t")
 
-    #control_normalized_comparisons = median_normalized_means[
-        #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / median_normalized_means['EXPERIMENT1']
-    #control_normalized_comparisons.to_csv(
-        #RESULTS_FOLDER +
-        #'control_normalized_comparisons.csv',
-        #sep="\t")
-    print means
-    print medians
-    # print means_normalized
-    # print medians_normalized
-    #means_normalized.to_csv(RESULTS_FOLDER + 'all_data_means.csv', sep="\t")
-    #medians_normalized.to_csv(RESULTS_FOLDER + 'all_data_medians.csv', sep="\t")
 
 """ compare_size computes the (median across replicates) plate normalized size of each gene from all
 experiments(2,3,4,5) to the control (experiment 1) """
 
+
 def compare_size(data):
+    # Ensure path exists for plate_measurements
+    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER,'data_summaries/')
+    if not os.path.exists(SUMMARIES_FOLDER):
+        os.makedirs(SUMMARIES_FOLDER)
     data = data.divide(data.median())
     data = data.groupby(
         axis=1,
@@ -236,13 +205,11 @@ def compare_size(data):
     #data = data[
         #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
     data.to_csv(
-        RESULTS_FOLDER +
+        SUMMARIES_FOLDER +
         'size_comparison.csv',
         sep="\t")
 
-# process a single day's data, this is for a given experiment, replica,
-# and pinning
-
+""" process a single day's data, this is for a given experiment, replica, and pinning """
 
 def process_day(filename, filename_to_save=None):
     db = measure.ColonyMeasurer()#show_images="all", save_images="all")
@@ -252,11 +219,14 @@ def process_day(filename, filename_to_save=None):
 
     return day_data, missing_count
 
-# get_gene_list returns a list of positions and genes in that position. The index of
-# this dataframe is the position
-
+""" get_gene_list returns a list of positions and genes in that position. The index of this
+dataframe is the position """
 
 def get_gene_list(replicate):
+    # Prepare directory
+    PLATE_TO_GENE_FOLDER = os.path.join(RESULTS_FOLDER,'plate_to_gene_mappings/')
+    if not os.path.exists(PLATE_TO_GENE_FOLDER):
+        os.makedirs(PLATE_TO_GENE_FOLDER)
     files = [
         './example_data/genes/1GS6.csv',
         './example_data/genes/2GS1.csv',
@@ -290,11 +260,8 @@ def get_gene_list(replicate):
             plate['Control'])
         plate['Column'], plate['Row'] = zip(
             *plate['Well'].apply(xl_cell_to_rowcol))
-        # print plate
-        if not os.path.exists(RESULTS_FOLDER + 'plate_to_gene_mappings'):
-            os.makedirs(RESULTS_FOLDER + 'plate_to_gene_mappings')
-        plate.to_csv(RESULTS_FOLDER + 'plate_to_gene_mappings/base_' +
-                     str(os.path.basename(files[i])))
+        plate.to_csv(os.path.join(PLATE_TO_GENE_FOLDER,
+                     str(os.path.splitext(os.path.basename(files[i]))[0])+'_to_plate.csv'))
         # transform each row/column to the correct row/column on the master
         # plate
         plate['Row'] *= 2
@@ -313,15 +280,14 @@ def get_gene_list(replicate):
         plate.set_index(['Row', 'Column'], inplace=True)
     master_plate = pd.concat(plates_data).sort_index()
     batch = "batch0"
-    master_plate.to_csv(
-        '{0}plate_to_gene_mappings/{1}_{2}_gene_mappings.csv'.format(
-            RESULTS_FOLDER, batch, replicate))
+    master_plate.to_csv(os.path.join(PLATE_TO_GENE_FOLDER,'{0}_replicate_{1}_gene_to_master_plate_mappings.csv'.format(
+            batch, replicate)))
     return master_plate
 
 if __name__ == "__main__":
-    data = measure_batch('./example_data/second_data')
-    data.to_pickle('./data.pkl')
-    #data = read_pickle('./data.pkl')
-    compare_size(data)
+    #data = measure_batch('./example_data/second_data')
+    #data.to_pickle('./data.pkl')
+    data = pd.read_pickle('./data.pkl')
+    #compare_size(data)
+    basic_stats_over_replicates(data)
     #day_data, missing = process_day('./example_data/Nere_imagesf/Set 1/EXPERIMENT6/T3/D/PINNING2/DAY1.JPG', filename_to_save= "w")
-    # print day_data
