@@ -16,7 +16,7 @@ from glob import glob
 
 class ColonyMeasurer(object):
 
-    def __init__(self, template_image="./example_data/kernel3.PNG",
+    def __init__(self, template_image="./example_data/kernel5.PNG",
                  show_images=None, save_images=None):
         self.kernel_file = template_image
         self.NUM_COLS = 24
@@ -24,7 +24,7 @@ class ColonyMeasurer(object):
         self.SHOW_IMAGES = show_images  # can set to 'all' or 'missing'
         self.SAVE_IMAGES = save_images  # can set to 'all' or 'missing'
 
-    def detectcolonies(self,image):
+    def detectcolonies(self, image):
         # Setup SimpleBlobDetector parameters.
         params = cv2.SimpleBlobDetector_Params()
         params.minDistBetweenBlobs = 30
@@ -55,7 +55,7 @@ class ColonyMeasurer(object):
                     largest = [keypoint]
                     size = keypoint.size
 
-        if self.SHOW_IMAGES!=None or self.SAVE_IMAGES!=None:
+        if self.SHOW_IMAGES is not None or self.SAVE_IMAGES is not None:
             im_with_keypoints = cv2.drawKeypoints(image, largest, np.array(
                 []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         else:
@@ -79,9 +79,9 @@ class ColonyMeasurer(object):
             kernel.shape[0],
             maxLoc[0]:maxLoc[0] +
             kernel.shape[1]]
-        #if self.SHOW_IMAGES == 'all':
-            #show(image)
-            #show(cropped_image)
+        # if self.SHOW_IMAGES == 'all':
+        # show(image)
+        # show(cropped_image)
         return cropped_image
 
     """ get_colony_size measures colonies in an image. It uses the # rows and # cols to chop up an image and measure the cell size. It then outputs a picture of the entire plate with circles around the colonies and an array of the size of the colonies. """
@@ -101,12 +101,12 @@ class ColonyMeasurer(object):
                     colony_size[x, y] = np.nan
                 else:
                     colony_size[x, y] = points[0].size
-                if self.SHOW_IMAGES!=None or self.SAVE_IMAGES!=None:
+                if self.SHOW_IMAGES is not None or self.SAVE_IMAGES is not None:
                     if rowpic is None:
                         rowpic = pic
                     else:
                         rowpic = np.hstack((rowpic, pic))
-            if self.SHOW_IMAGES!=None or self.SAVE_IMAGES!=None:
+            if self.SHOW_IMAGES is not None or self.SAVE_IMAGES is not None:
                 if colpic is None:
                     colpic = rowpic
                 else:
@@ -128,7 +128,8 @@ class ColonyMeasurer(object):
         inside_vals = list()
         for y in xrange(self.NUM_COLS):
             for x in xrange(self.NUM_ROWS):
-                if y == 0 or y == self.NUM_COLS - 1 or x == 0 or x == self.NUM_ROWS - 1:
+                if y == 0 or y == self.NUM_COLS - \
+                        1 or x == 0 or x == self.NUM_ROWS - 1:
                     outside_vals.append(sizes[x, y])
                 else:
                     inside_vals.append(sizes[x, y])
@@ -136,13 +137,14 @@ class ColonyMeasurer(object):
         new_sizes = np.empty_like(sizes)
         for y in xrange(self.NUM_COLS):
             for x in xrange(self.NUM_ROWS):
-                if y == 0 or y == self.NUM_COLS - 1 or x == 0 or x == self.NUM_ROWS - 1:
+                if y == 0 or y == self.NUM_COLS - \
+                        1 or x == 0 or x == self.NUM_ROWS - 1:
                     new_sizes[x, y] = sizes[x, y] * correction
                 else:
                     new_sizes[x, y] = sizes[x, y]
         return new_sizes
 
-    def measure_colonies(self, files, filename_to_save = None):
+    def measure_colonies(self, files, filename_to_save=None):
         total_missing = 0
         index = pd.MultiIndex.from_product(
             [range(self.NUM_ROWS), range(self.NUM_COLS)], names=["Row", "Column"])
@@ -160,10 +162,11 @@ class ColonyMeasurer(object):
             total_missing += missing_measurements
             if missing_measurements > 0:  # Report when missing measurements
                 print "Missing {0} for file {1}".format(missing_measurements, file)
-            if self.SHOW_IMAGES == 'all' or (self.SHOW_IMAGES == 'missing' and missing_measurements>0):
+            if self.SHOW_IMAGES == 'all' or (
+                    self.SHOW_IMAGES == 'missing' and missing_measurements > 0):
                 show(image_w_circles)
 
-            if filename_to_save != None:
+            if filename_to_save is not None:
                 cv2.imwrite(
                     "./results_images/{0}.png".format(filename_to_save),
                     image_w_circles)
@@ -212,8 +215,6 @@ def crop_to_kernel():
     pass
 
 
-
-
 def get_sub_image(x, y, image, x_size, y_size):
     stepx = image.shape[0] / x_size
     stepy = image.shape[1] / y_size
@@ -222,7 +223,7 @@ def get_sub_image(x, y, image, x_size, y_size):
 
 
 def check_is_image(fname):
-    return os.path.isfile(fname) and imghdr.what(fname) != None
+    return os.path.isfile(fname) and imghdr.what(fname) is not None
 if __name__ == "__main__":
     db = ColonyMeasurer()
     file_list = []
