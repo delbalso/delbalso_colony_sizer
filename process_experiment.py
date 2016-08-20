@@ -21,11 +21,14 @@ replicate_order = {
 """ Process a batch of experiments where path is a dir of experiment directories conforming to a experiment>treatment>replicate>pinning>day hierarchy where day is the leaf and is an image file."""
 
 
-def measure_batch(path):
+def measure_batch(path, fill_missing_with = None):
     # Ensure path exists for plate_measurements
     MEASUREMENTS_FOLDER = os.path.join(RESULTS_FOLDER,'plate_measurements/')
     if not os.path.exists(MEASUREMENTS_FOLDER):
         os.makedirs(MEASUREMENTS_FOLDER)
+    IMAGES_FOLDER = os.path.join(RESULTS_FOLDER,'plate_images/')
+    if not os.path.exists(IMAGES_FOLDER):
+        os.makedirs(IMAGES_FOLDER)
     pinnings = {}
     replicates = {}
     experiments = {}
@@ -92,8 +95,9 @@ def measure_batch(path):
     # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
         day_data, missing_count = process_day(
-            filepath, filename_to_save="{0}_{1}_{2}_{3}_{4}".format(
-                experiment, treatment, replicate, pinning, day))
+            filepath, filename_to_save=os.path.join(IMAGES_FOLDER,"{0}_{1}_{2}_{3}_{4}.png".format(
+                experiment, treatment, replicate, pinning, day)))
+        day = os.path.splitext(day)[0][:-3]
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
         day_data.set_index('SGD', inplace=True)
@@ -106,7 +110,7 @@ def measure_batch(path):
                  treatment,
                  replicate,
                  pinning,
-                 os.path.splitext(day)[0])],
+                 day)],
             names=[
                 'Experiments',
                 'Treatments',
@@ -127,8 +131,8 @@ def measure_batch(path):
                 treatment,
                 replicate,
                 pinning,
-                os.path.splitext(day)[0]),
-            sep="\t")
+                day),
+            sep=",")
         if master_table_not_defined:
 
             master_table = day_data
@@ -137,6 +141,8 @@ def measure_batch(path):
             master_table = master_table.join(day_data, how='outer')
         print master_table.shape
     print "Total number of missing colony measurements is {0}".format(total_missing)
+    if fill_missing_with is not None:
+        master_table = master_table.fillna(fill_missing_with)
     return master_table
 
 
@@ -158,7 +164,7 @@ def basic_stats_over_replicates(data):
             'Treatments',
             'Pinnings',
             'Days']).mean()
-    means.to_csv(SUMMARIES_FOLDER + 'mean_size_over_replicates.csv', sep="\t")
+    means.to_csv(SUMMARIES_FOLDER + 'mean_size_over_replicates.csv', sep=",")
 
     # Median
     medians = data.groupby(
@@ -168,7 +174,7 @@ def basic_stats_over_replicates(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    medians.to_csv(SUMMARIES_FOLDER + 'median_size_over_replicates.csv', sep="\t")
+    medians.to_csv(SUMMARIES_FOLDER + 'median_size_over_replicates.csv', sep=",")
 
     # Standard Deviations
     stddevs = data.groupby(
@@ -178,7 +184,7 @@ def basic_stats_over_replicates(data):
             'Treatments',
             'Pinnings',
             'Days']).std()
-    stddevs.to_csv(SUMMARIES_FOLDER + 'stddev_size_over_replicates.csv', sep="\t")
+    stddevs.to_csv(SUMMARIES_FOLDER + 'stddev_size_over_replicates.csv', sep=",")
 
 
 """ compare_size computes the (median across replicates) plate normalized size of each gene from all
@@ -190,7 +196,7 @@ def compare_size(data):
     SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER,'data_summaries/')
     if not os.path.exists(SUMMARIES_FOLDER):
         os.makedirs(SUMMARIES_FOLDER)
-    data = data.divide(data.median())
+    data = data.divide(data.median()) # divides by the median of each plate, not of the whole df
     data = data.groupby(
         axis=1,
         level=[
@@ -198,21 +204,26 @@ def compare_size(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    #df2 = data.copy()
-    #for c in data.columns.levels[0]:
-            #df2[c] = df[c] / df['three']
+    print "data shape {0}".format(data.shape)
+    print set(list(data['EXPERIMENT2'].columns.values)) - set(list(data['EXPERIMENT1'].columns.values))
+    print data['EXPERIMENT4'].columns.values
+    print "data E1 {0}".format(data['EXPERIMENT1'].shape)
+    print "data E2 {0}".format(data['EXPERIMENT2'].shape)
+    print "data E3 {0}".format(data['EXPERIMENT3'].shape)
+    print "data E4 {0}".format(data['EXPERIMENT4'].shape)
+    print "data E5 {0}".format(data['EXPERIMENT5'].shape)
     data = data / pd.concat( [ data['EXPERIMENT1']]  * 5, axis=1 ).values
     #data = data[
         #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
     data.to_csv(
         SUMMARIES_FOLDER +
         'size_comparison.csv',
-        sep="\t")
+        sep=",")
 
 """ process a single day's data, this is for a given experiment, replica, and pinning """
 
 def process_day(filename, filename_to_save=None):
-    db = measure.ColonyMeasurer()#show_images="all", save_images="all")
+    db = measure.ColonyMeasurer(show_images=None, save_images="all")
     print "Processing: {0}".format(filename)
     day_data, missing_count = db.measure_colonies(
         filename, filename_to_save=filename_to_save)
@@ -285,9 +296,9 @@ def get_gene_list(replicate):
     return master_plate
 
 if __name__ == "__main__":
-    #data = measure_batch('./example_data/second_data')
-    #data.to_pickle('./data.pkl')
-    data = pd.read_pickle('./data.pkl')
-    #compare_size(data)
+    data = measure_batch('./example_data/aug_17', fill_missing_with=5)
+    data.to_pickle('./data.pkl')
+    #data = pd.read_pickle('./data.pkl')
+    compare_size(data)
     basic_stats_over_replicates(data)
     #day_data, missing = process_day('./example_data/Nere_imagesf/Set 1/EXPERIMENT6/T3/D/PINNING2/DAY1.JPG', filename_to_save= "w")

@@ -168,7 +168,7 @@ class ColonyMeasurer(object):
 
             if filename_to_save is not None:
                 cv2.imwrite(
-                    "./results_images/{0}.png".format(filename_to_save),
+                    filename_to_save,
                     image_w_circles)
         return colonies_sizes, total_missing
 
