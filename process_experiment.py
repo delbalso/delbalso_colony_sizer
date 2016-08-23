@@ -212,7 +212,7 @@ def compare_size(data):
     print "data E3 {0}".format(data['EXPERIMENT3'].shape)
     print "data E4 {0}".format(data['EXPERIMENT4'].shape)
     print "data E5 {0}".format(data['EXPERIMENT5'].shape)
-    data = data / pd.concat( [ data['EXPERIMENT1']]  * 5, axis=1 ).values
+    data = data / pd.concat( [ data['EXPERIMENT1']]  * data.columns.get_level_values(0).unique().size, axis=1 ).values
     #data = data[
         #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
     data.to_csv(
@@ -294,6 +294,13 @@ def get_gene_list(replicate):
     master_plate.to_csv(os.path.join(PLATE_TO_GENE_FOLDER,'{0}_replicate_{1}_gene_to_master_plate_mappings.csv'.format(
             batch, replicate)))
     return master_plate
+
+def process(data_directory):#, kernel_image):
+    data = measure_batch(data_directory, fill_missing_with=5)
+    data.to_pickle('./data.pkl')
+    #data = pd.read_pickle('./data.pkl')
+    compare_size(data)
+    basic_stats_over_replicates(data)
 
 if __name__ == "__main__":
     data = measure_batch('./example_data/aug_17', fill_missing_with=5)

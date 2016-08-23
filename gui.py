@@ -3,7 +3,7 @@
 import Tkinter
 import ttk
 import tkFileDialog
-import dbcolonysizer
+import process_experiment
 
 
 class simpleapp_tk(Tkinter.Tk):
@@ -64,10 +64,10 @@ class simpleapp_tk(Tkinter.Tk):
     def OnGoButtonClick(self):
         print self.imagedirectory.get()
         print self.kernel_path.get()
-        files = dbcolonysizer.get_file_list(
-            image_directory=self.imagedirectory.get(),
-            template_image=self.kernel_path.get())
-        dbcolonysizer.process_files(files)
+        #files = process_experiment.get_file_list(
+            #image_directory=self.imagedirectory.get(),
+            #template_image=self.kernel_path.get())
+        process_experiment.process(self.imagedirectory.get())
         self.directory_textentry.focus_set()
         self.directory_textentry.selection_range(0, Tkinter.END)
 
