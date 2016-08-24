@@ -1,12 +1,12 @@
 # import the necessary packages
 import numpy as np
+import re
 import argparse
 import pandas as pd
 import os.path
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_cell_to_rowcol
 from os.path import join
 import imghdr
-from glob import glob
 import measure
 RESULTS_FOLDER = './results_numbers/'
 NUM_COLS = 24
@@ -21,12 +21,12 @@ replicate_order = {
 """ Process a batch of experiments where path is a dir of experiment directories conforming to a experiment>treatment>replicate>pinning>day hierarchy where day is the leaf and is an image file."""
 
 
-def measure_batch(path, fill_missing_with = None):
+def measure_batch(path, gene_folder, fill_missing_with=None):
     # Ensure path exists for plate_measurements
-    MEASUREMENTS_FOLDER = os.path.join(RESULTS_FOLDER,'plate_measurements/')
+    MEASUREMENTS_FOLDER = os.path.join(RESULTS_FOLDER, 'plate_measurements/')
     if not os.path.exists(MEASUREMENTS_FOLDER):
         os.makedirs(MEASUREMENTS_FOLDER)
-    IMAGES_FOLDER = os.path.join(RESULTS_FOLDER,'plate_images/')
+    IMAGES_FOLDER = os.path.join(RESULTS_FOLDER, 'plate_images/')
     if not os.path.exists(IMAGES_FOLDER):
         os.makedirs(IMAGES_FOLDER)
     pinnings = {}
@@ -48,12 +48,26 @@ def measure_batch(path, fill_missing_with = None):
         path, replicate = os.path.split(path)
         path, treatment = os.path.split(path)
         path, experiment = os.path.split(path)
+        assert re.match(
+            r"^PINNING \d$", pinning), "Invalid pinning at {0}, interpreted pinning to be \"{1}\"".format(
+            root, pinning)
+        assert re.match(
+            r"^[A-Z]$", replicate), "Invalid replicate at {0}, interpreted replicate to be \"{1}\"".format(
+            root, replicate)
+        assert re.match(
+            r"^T\d$", treatment), "Invalid treatment at {0}, interpreted treatment to be \"{1}\"".format(
+            root, treatment)
+        assert re.match(
+            r"^EXPERIMENT \d$", experiment), "Invalid experiment at {0}, interpreted experiment to be \"{1}\"".format(
+            root, experiment)
         pinnings[pinning] = 1
         replicates[replicate] = 1
         treatments[treatment] = 1
         experiments[experiment] = 1
         for day in files:
             filepath = os.path.join(root, day)
+            assert re.match(r"^DAY\d_\d\d", os.path.splitext(
+                day)[0]), "Invalid day at {0}, interpreted day to be \"{1}\"".format(root, day)
             days[day] = 1
             data_to_process.append(
                 (filepath, experiment, treatment, replicate, pinning, day))
@@ -83,7 +97,7 @@ def measure_batch(path, fill_missing_with = None):
     gene_list = {}
     gene_dict = {}  # keys are genes. used for deduping
     for replicate in replicates:
-        gene_list[replicate] = get_gene_list(replicate)
+        gene_list[replicate] = get_gene_list(replicate, gene_folder)
         for gene in gene_list[replicate]['SGD']:
             gene_dict[gene] = 1
     genes = gene_dict.keys()
@@ -95,8 +109,9 @@ def measure_batch(path, fill_missing_with = None):
     # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
         day_data, missing_count = process_day(
-            filepath, filename_to_save=os.path.join(IMAGES_FOLDER,"{0}_{1}_{2}_{3}_{4}.png".format(
-                experiment, treatment, replicate, pinning, day)))
+            filepath, filename_to_save=os.path.join(
+                IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
+                    experiment, treatment, replicate, pinning, day)))
         day = os.path.splitext(day)[0][:-3]
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
@@ -148,10 +163,11 @@ def measure_batch(path, fill_missing_with = None):
 
 """ basic_stats_over_replicates computes and saves medians and other stats from the data set"""
 
+
 def basic_stats_over_replicates(data):
 
     # Ensure path exists for plate_measurements
-    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER,'data_summaries/')
+    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER, 'data_summaries/')
     if not os.path.exists(SUMMARIES_FOLDER):
         os.makedirs(SUMMARIES_FOLDER)
     data.to_csv(SUMMARIES_FOLDER + 'all_data.csv', sep=",")
@@ -174,7 +190,10 @@ def basic_stats_over_replicates(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    medians.to_csv(SUMMARIES_FOLDER + 'median_size_over_replicates.csv', sep=",")
+    medians.to_csv(
+        SUMMARIES_FOLDER +
+        'median_size_over_replicates.csv',
+        sep=",")
 
     # Standard Deviations
     stddevs = data.groupby(
@@ -184,7 +203,10 @@ def basic_stats_over_replicates(data):
             'Treatments',
             'Pinnings',
             'Days']).std()
-    stddevs.to_csv(SUMMARIES_FOLDER + 'stddev_size_over_replicates.csv', sep=",")
+    stddevs.to_csv(
+        SUMMARIES_FOLDER +
+        'stddev_size_over_replicates.csv',
+        sep=",")
 
 
 """ compare_size computes the (median across replicates) plate normalized size of each gene from all
@@ -193,10 +215,11 @@ experiments(2,3,4,5) to the control (experiment 1) """
 
 def compare_size(data):
     # Ensure path exists for plate_measurements
-    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER,'data_summaries/')
+    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER, 'data_summaries/')
     if not os.path.exists(SUMMARIES_FOLDER):
         os.makedirs(SUMMARIES_FOLDER)
-    data = data.divide(data.median()) # divides by the median of each plate, not of the whole df
+    # divides by the median of each plate, not of the whole df
+    data = data.divide(data.median())
     data = data.groupby(
         axis=1,
         level=[
@@ -212,15 +235,17 @@ def compare_size(data):
     print "data E3 {0}".format(data['EXPERIMENT3'].shape)
     print "data E4 {0}".format(data['EXPERIMENT4'].shape)
     print "data E5 {0}".format(data['EXPERIMENT5'].shape)
-    data = data / pd.concat( [ data['EXPERIMENT1']]  * data.columns.get_level_values(0).unique().size, axis=1 ).values
-    #data = data[
-        #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
+    data = data / pd.concat([data['EXPERIMENT1']] *
+                            data.columns.get_level_values(0).unique().size, axis=1).values
+    # data = data[
+    #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
     data.to_csv(
         SUMMARIES_FOLDER +
         'size_comparison.csv',
         sep=",")
 
 """ process a single day's data, this is for a given experiment, replica, and pinning """
+
 
 def process_day(filename, filename_to_save=None):
     db = measure.ColonyMeasurer(show_images=None, save_images="all")
@@ -233,16 +258,25 @@ def process_day(filename, filename_to_save=None):
 """ get_gene_list returns a list of positions and genes in that position. The index of this
 dataframe is the position """
 
-def get_gene_list(replicate):
+
+def get_gene_list(replicate, genes_folder):
     # Prepare directory
-    PLATE_TO_GENE_FOLDER = os.path.join(RESULTS_FOLDER,'plate_to_gene_mappings/')
+    PLATE_TO_GENE_FOLDER = os.path.join(
+        RESULTS_FOLDER,
+        'plate_to_gene_mappings/')
     if not os.path.exists(PLATE_TO_GENE_FOLDER):
         os.makedirs(PLATE_TO_GENE_FOLDER)
-    files = [
-        './example_data/genes/1GS6.csv',
-        './example_data/genes/2GS1.csv',
-        './example_data/genes/2GS2_alt.csv',
-        './example_data/genes/2GS2.csv']
+    files = []
+    print("test")
+    assert os.path.isdir(
+        genes_folder), "Specified folder {0} is not a folder".format(genes_folder)
+    for root, dirs, file_list in os.walk(genes_folder):
+        # keep only images
+        for f in file_list:
+            if os.path.splitext(f)[1] == '.csv':
+                files.append(os.path.join(root, f))
+    print files
+    assert(len(files) == 4)
     file_order = replicate_order[replicate]
     plates_data = [pd.read_csv(i, header=1) for i in files]
     for i, plate in enumerate(plates_data):
@@ -271,8 +305,12 @@ def get_gene_list(replicate):
             plate['Control'])
         plate['Column'], plate['Row'] = zip(
             *plate['Well'].apply(xl_cell_to_rowcol))
-        plate.to_csv(os.path.join(PLATE_TO_GENE_FOLDER,
-                     str(os.path.splitext(os.path.basename(files[i]))[0])+'_to_plate.csv'))
+        plate.to_csv(
+            os.path.join(
+                PLATE_TO_GENE_FOLDER, str(
+                    os.path.splitext(
+                        os.path.basename(
+                            files[i]))[0]) + '_to_plate.csv'))
         # transform each row/column to the correct row/column on the master
         # plate
         plate['Row'] *= 2
@@ -291,19 +329,27 @@ def get_gene_list(replicate):
         plate.set_index(['Row', 'Column'], inplace=True)
     master_plate = pd.concat(plates_data).sort_index()
     batch = "batch0"
-    master_plate.to_csv(os.path.join(PLATE_TO_GENE_FOLDER,'{0}_replicate_{1}_gene_to_master_plate_mappings.csv'.format(
-            batch, replicate)))
+    master_plate.to_csv(
+        os.path.join(
+            PLATE_TO_GENE_FOLDER,
+            '{0}_replicate_{1}_gene_to_master_plate_mappings.csv'.format(
+                batch,
+                replicate)))
     return master_plate
 
-def process(data_directory):#, kernel_image):
-    data = measure_batch(data_directory, fill_missing_with=5)
+
+def process(data_directory, gene_directory):  # , kernel_image):
+    data = measure_batch(data_directory, gene_directory, fill_missing_with=5)
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
     compare_size(data)
     basic_stats_over_replicates(data)
 
 if __name__ == "__main__":
-    data = measure_batch('./example_data/aug_17', fill_missing_with=5)
+    data = measure_batch(
+        './example_data/aug_17',
+        './example_data/genes',
+        fill_missing_with=5)
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
     compare_size(data)
