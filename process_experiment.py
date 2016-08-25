@@ -302,7 +302,7 @@ def get_gene_list(replicate, genes_folder):
     files = sorted(files)
     assert(len(files) == 4)
     file_order = replicate_order[replicate]
-    plates_data = [pd.read_csv(i, header=1) for i in files]
+    plates_data = [pd.read_csv(i, header=0, engine='python') for i in files]
     for i, plate in enumerate(plates_data):
         # delete irrelevant columns/rows
         plate.drop(plate.columns[
@@ -310,14 +310,15 @@ def get_gene_list(replicate, genes_folder):
         plate.drop(
             plate.index[[range(96, plate.shape[0])]], axis=0, inplace=True)
         plate.columns = [
-            'ORF_original',
-            'SGD_original',
+            'ORF',
+            'SGD',
             'Plate',
             'Well',
             'to_delete',
             'Control']
+        print (plate)
         plate.drop('to_delete', axis=1, inplace=True)
-        plate['SGD'] = np.where(
+        """plate['SGD'] = np.where(
             pd.isnull(
                 plate['Control']),
             plate['SGD_original'],
@@ -327,6 +328,7 @@ def get_gene_list(replicate, genes_folder):
                 plate['Control']),
             plate['ORF_original'],
             plate['Control'])
+            """
         plate['Column'], plate['Row'] = zip(
             *plate['Well'].apply(xl_cell_to_rowcol))
         plate.to_csv(
@@ -376,6 +378,6 @@ if __name__ == "__main__":
         fill_missing_with=5)
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
-    # compare_size(data)
+    compare_size(data)
     basic_stats_over_replicates(data)
-    #day_data, missing = process_day('./example_data/Nere_imagesf/Set 1/EXPERIMENT6/T3/D/PINNING2/DAY1.JPG', filename_to_save= "w")
+    print ("Complete! You can close this window now.")
