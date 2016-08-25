@@ -292,7 +292,6 @@ def get_gene_list(replicate, genes_folder):
     if not os.path.exists(PLATE_TO_GENE_FOLDER):
         os.makedirs(PLATE_TO_GENE_FOLDER)
     files = []
-    print("test")
     assert os.path.isdir(
         genes_folder), "Specified folder {0} is not a folder".format(genes_folder)
     for root, dirs, file_list in os.walk(genes_folder):
@@ -300,7 +299,7 @@ def get_gene_list(replicate, genes_folder):
         for f in file_list:
             if os.path.splitext(f)[1] == '.csv':
                 files.append(os.path.join(root, f))
-    print files
+    files = sorted(files)
     assert(len(files) == 4)
     file_order = replicate_order[replicate]
     plates_data = [pd.read_csv(i, header=1) for i in files]
