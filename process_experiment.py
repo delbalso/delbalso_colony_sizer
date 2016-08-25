@@ -66,7 +66,7 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
         experiments[experiment] = 1
         for day in files:
             filepath = os.path.join(root, day)
-            assert re.match(r"^DAY\d_\d\d", os.path.splitext(
+            assert re.match(r"^DAY\d_", os.path.splitext(
                 day)[0]), "Invalid day at {0}, interpreted day to be \"{1}\"".format(root, day)
             days[day] = 1
             data_to_process.append(
@@ -112,7 +112,7 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
             filepath, filename_to_save=os.path.join(
                 IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
                     experiment, treatment, replicate, pinning, day)))
-        day = os.path.splitext(day)[0][:-3]
+        day = os.path.splitext(day)[0][:4]
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
         day_data.set_index('SGD', inplace=True)
@@ -158,6 +158,31 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
     print "Total number of missing colony measurements is {0}".format(total_missing)
     if fill_missing_with is not None:
         master_table = master_table.fillna(fill_missing_with)
+
+    # fill in missing columns so we can easily compare later
+    for experiment in experiments.keys():
+        # loop over all t,r,p,d for all experiments
+        for _, _, treatment, replicate, pinning, day in data_to_process:
+            if (experiment,
+                    treatment,
+                    replicate,
+                    pinning,
+                    os.path.splitext(day)[0][:4]) not in master_table.columns:
+                print("Adding empty column for [{0},{1},{2},{3},{4}]".format(
+                    experiment,
+                    treatment,
+                    replicate,
+                    pinning,
+                    os.path.splitext(day)[0][:4]))
+
+                master_table[
+                    experiment,
+                    treatment,
+                    replicate,
+                    pinning,
+                    os.path.splitext(day)[0][
+                        :4]] = np.nan
+
     return master_table
 
 
@@ -227,15 +252,15 @@ def compare_size(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    print "data shape {0}".format(data.shape)
-    print set(list(data['EXPERIMENT2'].columns.values)) - set(list(data['EXPERIMENT1'].columns.values))
-    print data['EXPERIMENT4'].columns.values
-    print "data E1 {0}".format(data['EXPERIMENT1'].shape)
-    print "data E2 {0}".format(data['EXPERIMENT2'].shape)
-    print "data E3 {0}".format(data['EXPERIMENT3'].shape)
-    print "data E4 {0}".format(data['EXPERIMENT4'].shape)
-    print "data E5 {0}".format(data['EXPERIMENT5'].shape)
-    data = data / pd.concat([data['EXPERIMENT1']] *
+    # print "data shape {0}".format(data.shape)
+    # print set(list(data['EXPERIMENT 2'].columns.values)) - set(list(data['EXPERIMENT 1'].columns.values))
+    # print data['EXPERIMENT 4'].columns.values
+    print "data E1 {0}".format(data['EXPERIMENT 1'].shape)
+    print "data E2 {0}".format(data['EXPERIMENT 2'].shape)
+    # print "data E3 {0}".format(data['EXPERIMENT 3'].shape)
+    # print "data E4 {0}".format(data['EXPERIMENT 4'].shape)
+    # print "data E5 {0}".format(data['EXPERIMENT 5'].shape)
+    data = data / pd.concat([data['EXPERIMENT 1']] *
                             data.columns.get_level_values(0).unique().size, axis=1).values
     # data = data[
     #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
@@ -347,11 +372,11 @@ def process(data_directory, gene_directory):  # , kernel_image):
 
 if __name__ == "__main__":
     data = measure_batch(
-        './example_data/aug_17',
+        './example_data/aug_22',
         './example_data/genes',
         fill_missing_with=5)
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
-    compare_size(data)
+    # compare_size(data)
     basic_stats_over_replicates(data)
     #day_data, missing = process_day('./example_data/Nere_imagesf/Set 1/EXPERIMENT6/T3/D/PINNING2/DAY1.JPG', filename_to_save= "w")
