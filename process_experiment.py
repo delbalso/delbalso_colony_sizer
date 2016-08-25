@@ -68,11 +68,10 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
             filepath = os.path.join(root, day)
             assert re.match(r"^DAY\d_", os.path.splitext(
                 day)[0]), "Invalid day at {0}, interpreted day to be \"{1}\"".format(root, day)
-            days[day] = 1
+            cleaned_day = os.path.splitext(day)[0][:4]
+            days[cleaned_day] = 1
             data_to_process.append(
-                (filepath, experiment, treatment, replicate, pinning, day))
-        # print "Experiment: "+str(experiment)+". Replicate:
-        # "+str(replicate)+". Pinning: "+str(pinning)+". Days: "+str(files)
+                (filepath, experiment, treatment, replicate, pinning, cleaned_day))
     assert len(
         data_to_process) > 0, "No valid files found to process. Check the directory."
     print "Processing {0} files".format(len(data_to_process))
@@ -83,7 +82,7 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
     print "Days: " + str(days.keys())
     print "Data to process: " + str(data_to_process)
     c_iterables = [experiments.keys(), treatments.keys(), replicates.keys(
-    ), pinnings.keys(), [os.path.splitext(day)[0] for day in days.keys()]]
+    ), pinnings.keys(), days.keys()]
     c_index = pd.MultiIndex.from_product(
         c_iterables,
         names=[
@@ -112,7 +111,6 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
             filepath, filename_to_save=os.path.join(
                 IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
                     experiment, treatment, replicate, pinning, day)))
-        day = os.path.splitext(day)[0][:4]
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
         day_data.set_index('SGD', inplace=True)
@@ -167,21 +165,20 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
                     treatment,
                     replicate,
                     pinning,
-                    os.path.splitext(day)[0][:4]) not in master_table.columns:
-                print("Adding empty column for [{0},{1},{2},{3},{4}]".format(
+                    day) not in master_table.columns:
+                print("There were no measurements for [{0},{1},{2},{3},{4}]".format(
                     experiment,
                     treatment,
                     replicate,
                     pinning,
-                    os.path.splitext(day)[0][:4]))
+                    day))
 
                 master_table[
                     experiment,
                     treatment,
                     replicate,
                     pinning,
-                    os.path.splitext(day)[0][
-                        :4]] = np.nan
+                    day] = np.nan
 
     return master_table
 
