@@ -108,9 +108,11 @@ def measure_batch(path, gene_folder, fill_missing_with=None):
     # Process files and populate main table
     for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
         day_data, missing_count = process_day(
-            filepath, filename_to_save=os.path.join(
+            filepath, 
+            filename_to_save=os.path.join(
                 IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
-                    experiment, treatment, replicate, pinning, day)))
+                    experiment, treatment, replicate, pinning, day)),
+            gene_names=gene_list[replicate])
         day_data.columns = ['single_column']
         day_data = day_data.join(gene_list[replicate])
         day_data.set_index('SGD', inplace=True)
@@ -294,10 +296,10 @@ def compute_gene_summary(data):
 """ process a single day's data, this is for a given experiment, replica, and pinning """
 
 
-def process_day(filename, filename_to_save=None):
-    db = measure.ColonyMeasurer(show_images=None, save_images="all")
+def process_day(filename, filename_to_save=None, gene_names=None):
+    db = measure.PlateMeasurer(show_images="all", save_images="all",gene_names=gene_names)
     print "Processing: {0}".format(filename)
-    day_data, missing_count = db.measure_colonies(
+    day_data, missing_count = db.process_plate_image(
         filename, filename_to_save=filename_to_save)
 
     return day_data, missing_count
@@ -340,17 +342,6 @@ def get_gene_list(replicate, genes_folder):
             'Control']
         print (plate)
         plate.drop('to_delete', axis=1, inplace=True)
-        """plate['SGD'] = np.where(
-            pd.isnull(
-                plate['Control']),
-            plate['SGD_original'],
-            plate['Control'])
-        plate['ORF'] = np.where(
-            pd.isnull(
-                plate['Control']),
-            plate['ORF_original'],
-            plate['Control'])
-            """
         plate['Column'], plate['Row'] = zip(
             *plate['Well'].apply(xl_cell_to_rowcol))
         plate.to_csv(

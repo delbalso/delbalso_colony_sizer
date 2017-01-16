@@ -11,20 +11,26 @@ from os.path import join
 from glob import glob
 
 
-""" ColonyMeasurer performs measurements on images of plates."""
+""" PlateMeasurer performs measurements on images of plates."""
 
 
-class ColonyMeasurer(object):
+class PlateMeasurer(object):
 
     def __init__(self, template_image="./example_data/kernel5.PNG",
-                 show_images=None, save_images=None):
+                 show_images=None, save_images=None, gene_names=None):
         self.kernel_file = template_image
         self.NUM_COLS = 24
         self.NUM_ROWS = 16
         self.SHOW_IMAGES = show_images  # can set to 'all' or 'missing'
         self.SAVE_IMAGES = save_images  # can set to 'all' or 'missing'
+        self.gene_names=gene_names # df with position as index
 
-    def detectcolonies(self, image):
+
+
+    """ measure_cell takes in a subimage of the plate image, finds the biggest colony, measures it,
+    and returns a measurement + image """
+
+    def measure_cell(self, image, gene_name):
         # Setup SimpleBlobDetector parameters.
         params = cv2.SimpleBlobDetector_Params()
         params.minDistBetweenBlobs = 30
@@ -58,6 +64,8 @@ class ColonyMeasurer(object):
         if self.SHOW_IMAGES is not None or self.SAVE_IMAGES is not None:
             im_with_keypoints = cv2.drawKeypoints(image, largest, np.array(
                 []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            im_with_keypoints = cv2.putText(im_with_keypoints,str(gene_name), (1,20), cv2.FONT_HERSHEY_SIMPLEX, .71, (0,255,255))
+
         else:
             im_with_keypoints = None
         return largest, im_with_keypoints
@@ -84,9 +92,9 @@ class ColonyMeasurer(object):
         # show(cropped_image)
         return cropped_image
 
-    """ get_colony_size measures colonies in an image. It uses the # rows and # cols to chop up an image and measure the cell size. It then outputs a picture of the entire plate with circles around the colonies and an array of the size of the colonies. """
+    """ measure_plate_colonies measures colonies in an image. It uses the # rows and # cols to chop up an image and measure the cell size. It then outputs a picture of the entire plate with circles around the colonies and an array of the size of the colonies. """
 
-    def get_colony_size(self, image):
+    def measure_plate_colonies(self, image):
         count_missing_measurements = 0
         colony_size = np.zeros((self.NUM_ROWS, self.NUM_COLS))
         colpic = None
@@ -94,7 +102,8 @@ class ColonyMeasurer(object):
             rowpic = None
             for y in xrange(0, self.NUM_COLS):
                 cell = get_sub_image(x, y, image, self.NUM_ROWS, self.NUM_COLS)
-                points, pic = self.detectcolonies(cell)
+                gene_name = self.gene_names.loc[x,y]["SGD"]
+                points, pic = self.measure_cell(cell,gene_name)
                 assert len(points) < 2
                 if len(points) < 1:
                     count_missing_measurements += 1
@@ -144,7 +153,7 @@ class ColonyMeasurer(object):
                     new_sizes[x, y] = sizes[x, y]
         return new_sizes
 
-    def measure_colonies(self, files, filename_to_save=None):
+    def process_plate_image(self, files, filename_to_save=None):
         total_missing = 0
         index = pd.MultiIndex.from_product(
             [range(self.NUM_ROWS), range(self.NUM_COLS)], names=["Row", "Column"])
@@ -154,7 +163,7 @@ class ColonyMeasurer(object):
         for file in files:
             image = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
             image_cropped = self.kernel_crop(image.copy())
-            colony_sizes, image_w_circles, missing_measurements = self.get_colony_size(
+            colony_sizes, image_w_circles, missing_measurements = self.measure_plate_colonies(
                 image_cropped)
             n_colony_sizes = self.normalize_edges(colony_sizes)
             colonies_sizes[os.path.splitext(os.path.basename(file))[
@@ -177,58 +186,20 @@ def show(image):
     cv2.imshow("Image", imutils.resize(image, width=800))
     cv2.waitKey(0)
 
-
-def rough_crop(gray_full):
-    resized = imutils.resize(gray_full, width=600)
-    ratio = gray_full.shape[0] / float(resized.shape[0])
-
-    # convert the resized image to grayscale, blur it slightly,
-    # and threshold it
-    gray = resized
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    thresh = cv2.threshold(blurred, 180, 255, cv2.THRESH_BINARY)[1]
-
-# find contours in the thresholded image and initialize the
-# shape detector
-    image, contours, hierarchy = cv2.findContours(
-        thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-# compute the center of the contour, then detect the name of the
-# shape using only the contour
-# multiply the contour (x, y)-coordinates by the resize ratio,
-# then draw the contours and the name of the shape on the image
-    largest_contour = None
-    largest_contour_area = 0
-    for contour in contours:
-        contour = np.array(np.array(contour) * ratio, dtype=int)
-        area = cv2.contourArea(contour)
-        if(area > largest_contour_area):
-            largest_contour = contour
-            largest_contour_area = area
-
-    #cv2.drawContours(image=gray_full, contours=[largest_contour], contourIdx=-1,thickness = cv2.FILLED, color=(255,0,0))
-    x, y, w, h = cv2.boundingRect(largest_contour)
-    cropped_gray = gray_full[y:y + h, x:x + w]
-    return cropped_gray
-
-
-def crop_to_kernel():
-    pass
-
-
 def get_sub_image(x, y, image, x_size, y_size):
     stepx = image.shape[0] / x_size
     stepy = image.shape[1] / y_size
     return image[x * stepx:(x + 1) * (stepx), y * stepy:(y + 1) * (stepy)]
     return image[y * stepy:(y + 1) * (stepy), x * stepx:(x + 1) * (stepx)]
 
-
 def check_is_image(fname):
     return os.path.isfile(fname) and imghdr.what(fname) is not None
+    
 if __name__ == "__main__":
-    db = ColonyMeasurer()
+    db = PlateMeasurer()
     file_list = []
     for root, dirs, files in os.walk('/Users/delbalso/Downloads/Gmail'):
         print files
         file_list = [os.path.join(root, file) for file in files]
     print file_list
-    db.measure_colonies(file_list)
+    db.process_plate_image(file_list)
