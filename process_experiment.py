@@ -249,18 +249,9 @@ def compare_size(data):
             'Treatments',
             'Pinnings',
             'Days']).median()
-    # print "data shape {0}".format(data.shape)
-    # print set(list(data['EXPERIMENT 2'].columns.values)) - set(list(data['EXPERIMENT 1'].columns.values))
-    # print data['EXPERIMENT 4'].columns.values
-    print "data E1 {0}".format(data['EXPERIMENT 1'].shape)
-    print "data E2 {0}".format(data['EXPERIMENT 2'].shape)
-    # print "data E3 {0}".format(data['EXPERIMENT 3'].shape)
-    # print "data E4 {0}".format(data['EXPERIMENT 4'].shape)
-    # print "data E5 {0}".format(data['EXPERIMENT 5'].shape)
     data = data / pd.concat([data['EXPERIMENT 1']] *
                             data.columns.get_level_values(0).unique().size, axis=1).values
     # data = data[
-    #['EXPERIMENT1', 'EXPERIMENT5', 'EXPERIMENT6']] / data['EXPERIMENT1']
     data.to_csv(
         SUMMARIES_FOLDER +
         'size_comparison.csv',
