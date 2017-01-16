@@ -257,6 +257,40 @@ def compare_size(data):
         'size_comparison.csv',
         sep=",")
 
+""" compute_gene_summary computes the (median across replicates / days / pinnings) plate normalized size of each gene from all
+experiments(2,3,4,5) and divides by the control (experiment 1) """
+
+
+def compute_gene_summary(data):
+    # Ensure path exists for plate_measurements
+    SUMMARIES_FOLDER = os.path.join(RESULTS_FOLDER, 'data_summaries/')
+    if not os.path.exists(SUMMARIES_FOLDER):
+        os.makedirs(SUMMARIES_FOLDER)
+    # divides by the median of each plate, not of the whole df
+    data = data.divide(data.median())
+    data = data.groupby(
+        axis=1,
+        level=[
+            'Experiments',
+            'Treatments',
+            'Pinnings',
+            'Days']).median()
+    # Compare to Exp1
+    data = data / pd.concat([data['EXPERIMENT 1']] *
+                            data.columns.get_level_values(0).unique().size, axis=1).values
+    data = data.groupby(
+        axis=1,
+        level=[
+            'Experiments',
+            'Treatments']).median()
+    data = data.stack()
+    data.to_pickle("/tmp/pckl")
+    # data = data[
+    data.to_csv(
+        SUMMARIES_FOLDER +
+        'gene_summary.csv',
+        sep=",")
+
 """ process a single day's data, this is for a given experiment, replica, and pinning """
 
 
@@ -367,5 +401,7 @@ if __name__ == "__main__":
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
     compare_size(data)
+    compute_gene_summary(data)
+
     basic_stats_over_replicates(data)
     print ("Complete! You can close this window now.")
