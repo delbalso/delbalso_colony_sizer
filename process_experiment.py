@@ -8,181 +8,206 @@ from xlsxwriter.utility import xl_rowcol_to_cell, xl_cell_to_rowcol
 from os.path import join
 import imghdr
 import measure
-RESULTS_FOLDER = './results_numbers/'
-NUM_COLS = 24
-NUM_ROWS = 16
-replicate_order = {
-    'A': [
-        0, 1, 2, 3], 'B': [
-            1, 0, 3, 2], 'C': [
-                2, 3, 0, 1], 'D': [
-                    3, 2, 1, 0]}  # which position each plate corresponds to on the master plate
 
-""" Process a batch of experiments where path is a dir of experiment directories conforming to a experiment>treatment>replicate>pinning>day hierarchy where day is the leaf and is an image file."""
+class SetMeasurer(object):
+    def __init__(self, root_path, gene_folder):
+        self.gene_folder = gene_folder
+        self.root_path = path 
+        self.file
+        
+        self.pinnings = []
+        self.replicates = []
+        self.experiments = []
+        self.treatments = []
+        self.days = []
+        self.data_to_process = []
 
+        self.NUM_COLS = 24
+        self.NUM_ROWS = 16
+        self.replicate_order = {
+            'A': [
+                0, 1, 2, 3], 'B': [
+                    1, 0, 3, 2], 'C': [
+                        2, 3, 0, 1], 'D': [
+                            3, 2, 1, 0]}  # which position each plate corresponds to on the master plate
 
-def measure_batch(path, gene_folder, fill_missing_with=None):
-    # Ensure path exists for plate_measurements
-    MEASUREMENTS_FOLDER = os.path.join(RESULTS_FOLDER, 'plate_measurements/')
-    if not os.path.exists(MEASUREMENTS_FOLDER):
-        os.makedirs(MEASUREMENTS_FOLDER)
-    IMAGES_FOLDER = os.path.join(RESULTS_FOLDER, 'plate_images/')
-    if not os.path.exists(IMAGES_FOLDER):
-        os.makedirs(IMAGES_FOLDER)
-    pinnings = {}
-    replicates = {}
-    experiments = {}
-    treatments = {}
-    days = {}
-    data_to_process = []
-    for root, dirs, files in os.walk(path):
-        # keep only images
-        files = [
-            file for file in files if imghdr.what(
-                os.path.join(
-                    root, file)) is not None]
-        if len(files) == 0:
-            continue
-        path = root
-        path, pinning = os.path.split(path)
-        path, replicate = os.path.split(path)
-        path, treatment = os.path.split(path)
-        path, experiment = os.path.split(path)
-        assert re.match(
-            r"^PINNING \d$", pinning), "Invalid pinning at {0}, interpreted pinning to be \"{1}\"".format(
-            root, pinning)
-        assert re.match(
-            r"^[A-Z]$", replicate), "Invalid replicate at {0}, interpreted replicate to be \"{1}\"".format(
-            root, replicate)
-        assert re.match(
-            r"^T\d$", treatment), "Invalid treatment at {0}, interpreted treatment to be \"{1}\"".format(
-            root, treatment)
-        assert re.match(
-            r"^EXPERIMENT \d$", experiment), "Invalid experiment at {0}, interpreted experiment to be \"{1}\"".format(
-            root, experiment)
-        pinnings[pinning] = 1
-        replicates[replicate] = 1
-        treatments[treatment] = 1
-        experiments[experiment] = 1
-        for day in files:
-            filepath = os.path.join(root, day)
-            assert re.match(r"^DAY\d_", os.path.splitext(
-                day)[0]), "Invalid day at {0}, interpreted day to be \"{1}\"".format(root, day)
-            cleaned_day = os.path.splitext(day)[0][:4]
-            days[cleaned_day] = 1
-            data_to_process.append(
-                (filepath, experiment, treatment, replicate, pinning, cleaned_day))
-    assert len(
-        data_to_process) > 0, "No valid files found to process. Check the directory."
-    print "Processing {0} files".format(len(data_to_process))
-    print "Experiments: " + str(experiments.keys())
-    print "Treatments: " + str(treatments.keys())
-    print "Replicates: " + str(replicates.keys())
-    print "Pinnings: " + str(pinnings.keys())
-    print "Days: " + str(days.keys())
-    print "Data to process: " + str(data_to_process)
-    c_iterables = [experiments.keys(), treatments.keys(), replicates.keys(
-    ), pinnings.keys(), days.keys()]
-    c_index = pd.MultiIndex.from_product(
-        c_iterables,
-        names=[
-            'Experiments',
-            'Treatments',
-            'Replicates',
-            'Pinnings',
-            'Days'])
-    # get a list of all genes in all experiments
-    # key is replicate, values are dataframes of row/col & genes
-    gene_list = {}
-    gene_dict = {}  # keys are genes. used for deduping
-    for replicate in replicates:
-        gene_list[replicate] = get_gene_list(replicate, gene_folder)
-        for gene in gene_list[replicate]['SGD']:
-            gene_dict[gene] = 1
-    genes = gene_dict.keys()
+        self.RESULTS_FOLDER = './results_numbers/'
+        if not os.path.exists(self.RESULTS_FOLDER):
+            os.makedirs(self.RESULTS_FOLDER)
 
-    master_table_not_defined = True
-    master_table = None
-    total_missing = 0
+        self.MEASUREMENTS_FOLDER = os.path.join(self.RESULTS_FOLDER, 'plate_measurements/')
+        if not os.path.exists(self.MEASUREMENTS_FOLDER):
+            os.makedirs(self.MEASUREMENTS_FOLDER)
+        
+        self.IMAGES_FOLDER = os.path.join(self.RESULTS_FOLDER, 'plate_images/')
+        if not os.path.exists(self.IMAGES_FOLDER):
+            os.makedirs(self.IMAGES_FOLDER)
 
-    # Process files and populate main table
-    for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
-        day_data, missing_count = process_day(
-            filepath, 
-            filename_to_save=os.path.join(
-                IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
-                    experiment, treatment, replicate, pinning, day)),
-            gene_names=gene_list[replicate])
-        day_data.columns = ['single_column']
-        day_data = day_data.join(gene_list[replicate])
-        day_data.set_index('SGD', inplace=True)
-        total_missing += missing_count
+    """ read_set operates on a directory for a set and populates all the internal variables based on what it reads """
+    def read_set():
+        pinnings = {}
+        replicates = {}
+        experiments = {}
+        treatments = {}
+        days = {}
+        data_to_process = []
+        for root, dirs, files in os.walk(self.root_path):
+            # keep only images
+            files = [
+                file for file in files if imghdr.what(
+                    os.path.join(
+                        root, file)) is not None]
+            if len(files) == 0:
+                continue
+            path = root
+            path, pinning = os.path.split(path)
+            path, replicate = os.path.split(path)
+            path, treatment = os.path.split(path)
+            path, experiment = os.path.split(path)
+            assert re.match(
+                r"^PINNING \d$", pinning), "Invalid pinning at {0}, interpreted pinning to be \"{1}\"".format(
+                root, pinning)
+            assert re.match(
+                r"^[A-Z]$", replicate), "Invalid replicate at {0}, interpreted replicate to be \"{1}\"".format(
+                root, replicate)
+            assert re.match(
+                r"^T\d$", treatment), "Invalid treatment at {0}, interpreted treatment to be \"{1}\"".format(
+                root, treatment)
+            assert re.match(
+                r"^EXPERIMENT \d$", experiment), "Invalid experiment at {0}, interpreted experiment to be \"{1}\"".format(
+                root, experiment)
+            pinnings[pinning] = 1
+            replicates[replicate] = 1
+            treatments[treatment] = 1
+            experiments[experiment] = 1
+            for day in files:
+                filepath = os.path.join(root, day)
+                assert re.match(r"^DAY\d_", os.path.splitext(
+                    day)[0]), "Invalid day at {0}, interpreted day to be \"{1}\"".format(root, day)
+                cleaned_day = os.path.splitext(day)[0][:4]
+                days[cleaned_day] = 1
+                data_to_process.append(
+                    (filepath, experiment, treatment, replicate, pinning, cleaned_day))
+        assert len(
+            data_to_process) > 0, "No valid files found to process. Check the directory."
+        self.pinnings = pinnings.keys()
+        self.replicates = replicates.keys()
+        self.experiments = experiments.keys()
+        self.treatments = treatments.keys()
+        self.days = days.keys()
+        self.data_to_process = data_to_process
 
-        # Make new index that has different levels
-        day_index = pd.MultiIndex.from_tuples(
-            [
-                (experiment,
-                 treatment,
-                 replicate,
-                 pinning,
-                 day)],
+    """ Process a batch of experiments where path is a dir of experiment directories conforming to a 
+    experiment>treatment>replicate>pinning>day hierarchy where day is the leaf and is an image file."""
+    def measure_batch(path, gene_folder, fill_missing_with=None):
+        print "Processing {0} files".format(len(data_to_process))
+        print "Experiments: " + str(self.experiments)
+        print "Treatments: " + str(self.treatments)
+        print "Replicates: " + str(self.replicates)
+        print "Pinnings: " + str(self.pinnings)
+        print "Days: " + str(self.days)
+        print "Data to process: " + str(self.data_to_process)
+        c_iterables = [self.experiments, self.treatments, self.replicates, self.pinnings, self.days]
+        c_index = pd.MultiIndex.from_product(
+            c_iterables,
             names=[
                 'Experiments',
                 'Treatments',
                 'Replicates',
                 'Pinnings',
                 'Days'])
-        day_data = day_data['single_column']
-        day_data = pd.DataFrame(
-            day_data.values,
-            columns=day_index,
-            index=day_data.index)
-        groups = day_data.groupby(level=0)  # dedupe repeated indices
-        day_data = groups.last()
-        day_data.to_csv(
-            "{0}{1}_{2}_{3}_{4}_{5}.csv".format(
-                MEASUREMENTS_FOLDER,
-                experiment,
-                treatment,
-                replicate,
-                pinning,
-                day),
-            sep=",")
-        if master_table_not_defined:
+        # get a list of all genes in all experiments
+        # key is replicate, values are dataframes of row/col & genes
+        gene_list = {}
+        gene_dict = {}  # keys are genes. used for deduping
+        for replicate in self.replicates:
+            gene_list[replicate] = get_gene_list(replicate, gene_folder)
+            for gene in gene_list[replicate]['SGD']:
+                gene_dict[gene] = 1
+        genes = gene_dict.keys()
 
-            master_table = day_data
-            master_table_not_defined = False
-        else:
-            master_table = master_table.join(day_data, how='outer')
-        print master_table.shape
-    print "Total number of missing colony measurements is {0}".format(total_missing)
-    if fill_missing_with is not None:
-        master_table = master_table.fillna(fill_missing_with)
+        master_table_not_defined = True
+        master_table = None
+        total_missing = 0
 
-    # fill in missing columns so we can easily compare later
-    for experiment in experiments.keys():
-        # loop over all t,r,p,d for all experiments
-        for _, _, treatment, replicate, pinning, day in data_to_process:
-            if (experiment,
-                    treatment,
-                    replicate,
-                    pinning,
-                    day) not in master_table.columns:
-                print("There were no measurements for [{0},{1},{2},{3},{4}]".format(
+        # Process files and populate main table
+        for filepath, experiment, treatment, replicate, pinning, day in data_to_process:
+            day_data, missing_count = process_day(
+                filepath, 
+                filename_to_save=os.path.join(
+                    IMAGES_FOLDER, "{0}_{1}_{2}_{3}_{4}.png".format(
+                        experiment, treatment, replicate, pinning, day)),
+                gene_names=gene_list[replicate])
+            day_data.columns = ['single_column']
+            day_data = day_data.join(gene_list[replicate])
+            day_data.set_index('SGD', inplace=True)
+            total_missing += missing_count
+
+            # Make new index that has different levels
+            day_index = pd.MultiIndex.from_tuples(
+                [
+                    (experiment,
+                     treatment,
+                     replicate,
+                     pinning,
+                     day)],
+                names=[
+                    'Experiments',
+                    'Treatments',
+                    'Replicates',
+                    'Pinnings',
+                    'Days'])
+            day_data = day_data['single_column']
+            day_data = pd.DataFrame(
+                day_data.values,
+                columns=day_index,
+                index=day_data.index)
+            groups = day_data.groupby(level=0)  # dedupe repeated indices
+            day_data = groups.last()
+            day_data.to_csv(
+                "{0}{1}_{2}_{3}_{4}_{5}.csv".format(
+                    MEASUREMENTS_FOLDER,
                     experiment,
                     treatment,
                     replicate,
                     pinning,
-                    day))
+                    day),
+                sep=",")
+            if master_table_not_defined:
 
-                master_table[
-                    experiment,
-                    treatment,
-                    replicate,
-                    pinning,
-                    day] = np.nan
+                master_table = day_data
+                master_table_not_defined = False
+            else:
+                master_table = master_table.join(day_data, how='outer')
+            print master_table.shape
+        print "Total number of missing colony measurements is {0}".format(total_missing)
+        if fill_missing_with is not None:
+            master_table = master_table.fillna(fill_missing_with)
 
-    return master_table
+        # fill in missing columns so we can easily compare later
+        for experiment in experiments:
+            # loop over all t,r,p,d for all experiments
+            for _, _, treatment, replicate, pinning, day in data_to_process:
+                if (experiment,
+                        treatment,
+                        replicate,
+                        pinning,
+                        day) not in master_table.columns:
+                    print("There were no measurements for [{0},{1},{2},{3},{4}]".format(
+                        experiment,
+                        treatment,
+                        replicate,
+                        pinning,
+                        day))
+
+                    master_table[
+                        experiment,
+                        treatment,
+                        replicate,
+                        pinning,
+                        day] = np.nan
+
+        return master_table
 
 
 """ basic_stats_over_replicates computes and saves medians and other stats from the data set"""
@@ -378,7 +403,9 @@ def get_gene_list(replicate, genes_folder):
 
 
 def process(data_directory, gene_directory):  # , kernel_image):
-    data = measure_batch(data_directory, gene_directory, fill_missing_with=5)
+    m = SetMeasurer(data_directory, gene_directory)
+    m.read_set()
+    data = m.measure_batch(fill_missing_with=5)
     data.to_pickle('./data.pkl')
     #data = pd.read_pickle('./data.pkl')
     compare_size(data)
